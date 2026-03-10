@@ -1,5 +1,6 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import dotenv from 'dotenv';
+import { parseRaydiumSwap } from './transaction-parser';
 
 dotenv.config();
 
@@ -13,6 +14,8 @@ if (!rpcUrl || !wssUrl) {
 
 const RAYDIUM_PROGRAM_ID = new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
 
+let isProcessing = false;
+
 async function startRaydiumListener() {
   console.log('Connecting to Solana WebSocket...');
   
@@ -22,19 +25,32 @@ async function startRaydiumListener() {
   });
 
   console.log(`Listening for Raydium transactions (Program: ${RAYDIUM_PROGRAM_ID.toBase58()})...`);
+  console.log(`Throttle active: Processing max 1 transaction per second to avoid 429 errors.`);
 
   try {
     const subscriptionId = connection.onLogs(
       RAYDIUM_PROGRAM_ID,
-      (logs, context) => {
-        if (logs.err) {
-          return;
-        }
+      async (logs, context) => {
+        if (logs.err) return;
 
-        console.log(`\n[Raydium Tx Detected] Signature: ${logs.signature}`);
-        console.log(`Slot: ${context.slot}`);
+        if (isProcessing) return;
         
-        console.log(`Logs array length: ${logs.logs.length} instructions`);
+        isProcessing = true; 
+        
+        console.log(`\n[Raydium Tx Detected] Signature: ${logs.signature}`);
+        
+        try {
+          const parsedData = await parseRaydiumSwap(connection, logs.signature);
+          if (parsedData && parsedData.swapDetails.tokenIn && parsedData.swapDetails.tokenOut) {
+            console.log(JSON.stringify(parsedData, null, 2));
+          } else {
+             console.log(`Transaction did not contain standard swap data. Moving on...`);
+          }
+        } finally {
+          setTimeout(() => {
+            isProcessing = false;
+          }, 1000); 
+        }
       },
       'confirmed'
     );
