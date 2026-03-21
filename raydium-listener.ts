@@ -1,6 +1,7 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import dotenv from 'dotenv';
 import { parseRaydiumSwap } from './transaction-parser';
+import { publishToQueue } from './queue-publisher';
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ async function startRaydiumListener() {
         try {
           const parsedData = await parseRaydiumSwap(connection, logs.signature);
           if (parsedData && parsedData.swapDetails.tokenIn && parsedData.swapDetails.tokenOut) {
+            await publishToQueue(parsedData);
             console.log(JSON.stringify(parsedData, null, 2));
           } else {
              console.log(`Transaction did not contain standard swap data. Moving on...`);
