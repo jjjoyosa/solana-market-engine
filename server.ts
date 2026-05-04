@@ -3,6 +3,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { SwapEvent } from './database/SwapModel';
+import { ScannerService } from './services/ScannerService';
 
 dotenv.config();
 
@@ -18,6 +19,22 @@ app.get('/api/swaps', async (req, res) => {
     res.json(recentSwaps);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch swaps' });
+  }
+});
+
+app.get('/api/scan/:mint', async (req, res) => {
+  try {
+    const { mint } = req.params;
+    
+    if (mint.length < 32 || mint.length > 44) {
+       res.status(400).json({ error: 'Invalid mint address format' });
+       return;
+    }
+
+    const report = await ScannerService.scanToken(mint);
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error during scan' });
   }
 });
 

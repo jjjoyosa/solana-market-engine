@@ -14,9 +14,9 @@ if (!rpcUrl || !wssUrl) {
 async function testSocketConnection() {
   console.log('Connecting to Solana WebSocket endpoint...');
   
-  const connection = new Connection(rpcUrl, {
+  const connection = new Connection(rpcUrl!, {
     commitment: 'confirmed',
-    wsEndpoint: wssUrl
+    wsEndpoint: wssUrl,
   });
 
   try {
