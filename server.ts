@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { SwapEvent } from './database/SwapModel';
 import { ScannerService } from './services/ScannerService';
+import { BotService } from './services/BotService';
 
 dotenv.config();
 
@@ -42,5 +43,7 @@ const PORT = 3001;
 mongoose.connect(process.env.MONGO_URI!).then(() => {
   app.listen(PORT, () => {
     console.log(`Backend API running on http://localhost:${PORT}`);
+    const telegramBot = new BotService();
+    telegramBot.start();
   });
 });
