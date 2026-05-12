@@ -9,31 +9,32 @@ export class BotService {
 
   constructor() {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
-    this.initializeCommands();
+    this.initializeMonitor();
   }
 
-  private initializeCommands() {
-    this.bot.command('scan', async (ctx) => {
-      const args = ctx.message.text.split(' ');
-      if (args.length !== 2) return ctx.reply('❌ Usage: `/scan <mint_address>`', { parse_mode: 'Markdown' });
+  private initializeMonitor() {
+    this.bot.on('text', async (ctx) => {
+      const text = ctx.message.text.trim();
+      
+      const solanaMintRegex = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
+      const match = text.match(solanaMintRegex);
 
-      const mint = args[1];
+      if (match) {
+        const mint = match[0];
+        
+        try {
+          const response = await axios.get(`http://localhost:3001/api/scan/${mint}`);
+          const data = response.data;
 
-      try {
-        // We do NOT send a "Scanning..." message here. 
-        // We go straight to fetching the data.
-        const response = await axios.get(`http://localhost:3001/api/scan/${mint}`);
-        const data = response.data;
-        // UI GENERATION
-        const price = data.market.price ? `$${data.market.price.toFixed(8)}` : 'N/A';
-        const mc = data.market.marketCap ? `$${(data.market.marketCap / 1000).toFixed(1)}K` : 'N/A';
-        const liq = data.market.liquidity ? `$${(data.market.liquidity / 1000).toFixed(1)}K` : 'Bonding Curve';
-        const vol = data.market.volume24h ? `$${(data.market.volume24h / 1000).toFixed(1)}K` : 'N/A';
-        const top10 = data.security.top10Holders ? data.security.top10Holders.toFixed(1) : 'N/A';
-        const risks = (data.security.risks && data.security.risks.length > 0) ? data.security.risks[0] : 'Clean';
-        const age = data.market.age || 'Unknown';
+          const price = data.market.price ? `$${data.market.price.toFixed(8)}` : 'N/A';
+          const mc = data.market.marketCap ? `$${(data.market.marketCap / 1000).toFixed(1)}K` : 'N/A';
+          const liq = data.market.liquidity ? `$${(data.market.liquidity / 1000).toFixed(1)}K` : 'Bonding Curve';
+          const vol = data.market.volume24h ? `$${(data.market.volume24h / 1000).toFixed(1)}K` : 'N/A';
+          const top10 = data.security.top10Holders ? data.security.top10Holders.toFixed(1) : 'N/A';
+          const risks = (data.security.risks && data.security.risks.length > 0) ? data.security.risks[0] : 'Clean';
+          const age = data.market.age || 'Unknown';
 
-        const report = `
+          const report = `
 💊 ${data.market.symbol} | \`${data.mint}\`
 
 💰 **MC:** ${mc}
@@ -64,20 +65,21 @@ ${data.security.isScam ? '🚨 **STATUS: RUG PULL DETECTED**' : '✅ **STATUS: S
 👻 **Socials:** [TG](https://t.me/${data.mint}) | [X](https://x.com/${data.mint}) | [Web](https://${data.mint})
 `;
 
-        // Send the report instantly when ready
-        await ctx.reply(report, { 
-            parse_mode: 'Markdown', 
-            link_preview_options: { is_disabled: true } 
-        });
+          await ctx.reply(report, { 
+              parse_mode: 'Markdown', 
+              link_preview_options: { is_disabled: true },
+              reply_parameters: { message_id: ctx.message.message_id }
+          });
 
-      } catch (error) {
-        ctx.reply('❌ Failed to fetch token data.');
+        } catch (error) {
+          console.error(`Failed to auto-scan ${mint}`);
+        }
       }
     });
   }
 
   public start() {
     this.bot.launch();
-    console.log('🤖 Telegram Bot Gateway listening...');
+    console.log('🤖 Telegram Bot Gateway listening for addresses...');
   }
 }
