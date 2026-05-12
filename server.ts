@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { SwapEvent } from './database/SwapModel';
 import { ScannerService } from './services/ScannerService';
 import { BotService } from './services/BotService';
 
@@ -11,17 +10,6 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-app.get('/api/swaps', async (req, res) => {
-  try {
-    const recentSwaps = await SwapEvent.find()
-      .sort({ 'transaction.timestamp': -1 })
-      .limit(50);
-    res.json(recentSwaps);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch swaps' });
-  }
-});
 
 app.get('/api/scan/:mint', async (req, res) => {
   try {
