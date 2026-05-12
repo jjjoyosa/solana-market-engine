@@ -29,14 +29,6 @@ export class ScannerService {
       
       const rug = rugRes?.data || {};
 
-      // --- 3. PRINT RAW PAYLOADS TO CONSOLE ---
-      console.log(`\n=========================================`);
-      console.log(`[DEBUG] RAW BIRDEYE OVERVIEW RESPONSE`);
-      console.log(JSON.stringify(overview, null, 2)); 
-      console.log(`\n[DEBUG] RAW RUGCHECK FULL REPORT`);
-      console.log(JSON.stringify(rug, null, 2)); 
-      console.log(`=========================================\n`);
-
       // --- 4. TOKEN AGE CALCULATION ---
       let ageStr = "Unknown";
       if (overview.createdAt) {
@@ -78,6 +70,7 @@ export class ScannerService {
       return {
         mint: mintAddress,
         market: {
+            symbol: overview.symbol || 'N/A',
           price: overview.price || 0,
           marketCap: finalMarketCap,
           liquidity: overview.liquidity || 0,
