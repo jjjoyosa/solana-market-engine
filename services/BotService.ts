@@ -35,7 +35,7 @@ export class BotService {
           const age = data.market.age || 'Unknown';
 
           const report = `
-💊 ${data.market.symbol} | \`${data.mint}\`
+${data.market.symbol} | \`${data.mint}\`
 
 💰 **MC:** ${mc}
 💵 **Price:** ${price}
@@ -45,12 +45,12 @@ export class BotService {
 👥 **Hodls:** ${data.market.holders}
 ⏳ **Age:** ${age} 
 
-🦅 *DISTRIBUTION & SNIPERS*
+*DISTRIBUTION & SNIPERS*
 📦 **/Bundles:** 21 • 73% 
 🔫 **Snipers:** 30 • 30% 
 🎯 **First 20:** 33% | 📦 12% | 🌱 0.9%
 
-🛠️ *DEV & SECURITY*
+*DEV & SECURITY*
 ${data.security.isScam ? '🚨 **STATUS: RUG PULL DETECTED**' : '✅ **STATUS: SAFE**'}
 🛡️ **Score:** ${data.security.score}
 🚩 **Flag:** ${risks}
