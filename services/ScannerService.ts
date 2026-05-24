@@ -3,9 +3,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const cache = new Map<string, { data: any, expires: number }>();
+const CACHE_TTL_MS = 30000;
+
 export class ScannerService {
-  static async scanToken(mintAddress: string) {
+  static async scanToken(mintAddress: string, forceRefresh = false) {
     try {
+        if (!forceRefresh) {
+        const cached = cache.get(mintAddress);
+        if (cached && Date.now() < cached.expires) {
+          console.log(`[Cache] Serving ${mintAddress} from memory.`);
+          return cached.data;
+        }
+      }
       console.log(`[Scanner] Fetching market data & scanning RPC for: ${mintAddress}`);
 
       const birdeyeRes = await axios.get(`https://public-api.birdeye.so/defi/token_overview?address=${mintAddress}`, {
@@ -56,9 +66,9 @@ export class ScannerService {
       const devHoldings = topHolders.find((h: any) => h.owner === creatorAddress);
       const devHeldPct = devHoldings ? (devHoldings.pct || 0) : 0;
       const devSoldPct = creatorAddress !== "N/A" ? Math.max(0, Math.min(100, 100 - devHeldPct)) : 0;
-      //
+    
 
-      return {
+      const reportData = {
         mint: mintAddress,
         market: {
             symbol: overview.symbol || 'N/A',
@@ -94,6 +104,9 @@ export class ScannerService {
           }
         }
       };
+
+      cache.set(mintAddress, { data: reportData, expires: Date.now() + CACHE_TTL_MS });
+      return reportData;
     } catch (e) {
       console.error(e);
       throw new Error('Failed to generate token report');
