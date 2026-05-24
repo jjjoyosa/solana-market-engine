@@ -29,7 +29,7 @@ export class BotService {
     const top20 = data.security.top20Holders ? data.security.top20Holders.toFixed(1) : 'N/A';
     const risks = (data.security.risks && data.security.risks.length > 0) ? data.security.risks[0] : 'Clean';
     
-    const isFakeVol = data.market.volume24h > (data.market.marketCap * 0.5);
+    const isFakeVol = data.market.liquidity > 0 && data.market.volume24h > (data.market.liquidity * 30);
     const mintStatus = data.security.mintRevoked ? "✅ Revoked" : "❌ Active";
     const freezeStatus = data.security.freezeRevoked ? "✅ Revoked" : "❌ Active";
 
@@ -54,6 +54,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
 ⛓️ **Mint Auth:** ${mintStatus}
 ❄️ **Freeze Auth:** ${freezeStatus}
 👥 **Top 10% Owns:** ${top10}%
+
 🛠 **Dev:** \`${data.security.creator.address}\`
 💰 **Dev Balance:** ${data.security.creator.balance} SOL
  ├ **Held:** ${data.security.creator.heldPct.toFixed(1)}% 🤍
