@@ -26,40 +26,49 @@ export class BotService {
           const response = await axios.get(`http://localhost:3001/api/scan/${mint}`);
           const data = response.data;
 
-          const price = data.market.price ? `$${data.market.price.toFixed(8)}` : 'N/A';
-          const mc = data.market.marketCap ? `$${(data.market.marketCap / 1000).toFixed(1)}K` : 'N/A';
-          const liq = data.market.liquidity ? `$${(data.market.liquidity / 1000).toFixed(1)}K` : 'Bonding Curve';
-          const vol = data.market.volume24h ? `$${(data.market.volume24h / 1000).toFixed(1)}K` : 'N/A';
+        const formatUSD = (val: number) => {
+            if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
+            if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
+            return `$${val.toFixed(2)}`;
+        };
+
+
+          const price = data.market.price ? `${formatUSD(data.market.price)}` : 'N/A';
+          const mc = data.market.marketCap ? `${formatUSD(data.market.marketCap)}` : 'N/A';
+          const liq = data.market.liquidity ? `${formatUSD(data.market.liquidity)}` : 'Bonding Curve';
+          const vol = data.market.volume24h ? `${formatUSD(data.market.volume24h)}` : 'N/A';
           const top10 = data.security.top10Holders ? data.security.top10Holders.toFixed(1) : 'N/A';
           const risks = (data.security.risks && data.security.risks.length > 0) ? data.security.risks[0] : 'Clean';
-          const age = data.market.age || 'Unknown';
-
+            const isFakeVol = data.market.volume24h > (data.market.marketCap * 0.5);
+            const mintStatus = data.security.mintRevoked ? "✅ Revoked" : "❌ Active";
+            const freezeStatus = data.security.freezeRevoked ? "✅ Revoked" : "❌ Active";
           const report = `
 ${data.market.symbol} | \`${data.mint}\`
 
-💰 **MC:** ${mc}
-💵 **Price:** ${price}
-💧 **Liq:** ${liq} 
-📊 **Vol:** ${vol}
+💰 **MC:** ${mc} | 💵 **Price:** ${price}
+💧 **Liq:** ${liq} ${data.security.lpLocked > 90 ? '🔒' : '⚠️'}
+📊 **Vol:** ${vol} ${isFakeVol ? '⚠️ Fake Vol' : ''}
 🔄 **Txns:** 🟢 ${data.market.buys} | 🔴 ${data.market.sells}
 👥 **Hodls:** ${data.market.holders}
-⏳ **Age:** ${age} 
 
 *DISTRIBUTION & SNIPERS*
-📦 **/Bundles:** 21 • 73% 
+📦 **Bundles:** 21 • 73% 
 🔫 **Snipers:** 30 • 30% 
 🎯 **First 20:** 33% | 📦 12% | 🌱 0.9%
 
 *DEV & SECURITY*
-${data.security.isScam ? '🚨 **STATUS: RUG PULL DETECTED**' : '✅ **STATUS: SAFE**'}
+${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
 🛡️ **Score:** ${data.security.score}
 🚩 **Flag:** ${risks}
-👥 **Top 10% Own:** ${top10}%
-🛠 **Dev:** 118 SOL • 0% Sold
+⛓️ **Mint Auth:** ${mintStatus}
+❄️ **Freeze Auth:** ${freezeStatus}
+👥 **Top 10% Owns:** ${top10}%
+🛠 **Dev:** \`${data.security.creator.address}\`
+💰 **Dev Balance:** ${data.security.creator.balance} SOL
  ├ **Bundled:** 16% 🤍 | **Sold:** 14% 🔴
  └ **Airdrop:** 2% 🤍
 
-🔗 *QUICK LINKS*
+ *QUICK LINKS*
 📈 **Chart:** [DexScreener](https://dexscreener.com/solana/${data.mint}) | [BullX](https://bullx.io/terminal?chainId=1399811149&address=${data.mint})
 ⚡ **Trade:** [Photon](https://photon-sol.tinyastro.io/en/lp/${data.mint}) | [GMGN](https://gmgn.ai/sol/token/${data.mint})
 👻 **Socials:** [TG](https://t.me/${data.mint}) | [X](https://x.com/${data.mint}) | [Web](https://${data.mint})

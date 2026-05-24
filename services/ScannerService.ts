@@ -26,21 +26,8 @@ export class ScannerService {
       });
       
       const rug = rugRes?.data || {};
-
-      let ageStr = "Unknown";
-      if (overview.createdAt) {
-        const createdDate = new Date(overview.createdAt);
-        const diffMs = Date.now() - createdDate.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        
-        if (diffMins < 60) {
-            ageStr = `${diffMins}m`;
-        } else if (diffMins < 1440) {
-            ageStr = `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
-        } else {
-            ageStr = `${Math.floor(diffMins / 1440)}d`;
-        }
-      }
+      const lp = rug.lp || {};
+      const creator = rug.creator || {};
 
       const exts = overview.extensions || {};
       const socials = {
@@ -54,10 +41,9 @@ export class ScannerService {
       const calculatedMc = overview.price && overview.supply ? (overview.price * overview.supply) : null;
       const finalMarketCap = overview.mc || overview.realMc || calculatedMc || fallbackMc || 0;
 
-      let top10Pct = rug.top10HolderPercent || 0;
-      if (!top10Pct && Array.isArray(rug.topHolders)) {
-          top10Pct = rug.topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (h.pct || 0), 0) * 100;
-      }
+      const top10Pct = (Array.isArray(rug.topHolders)) 
+        ? rug.topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (h.pct || 0), 0) 
+        : (rug.top10HolderPercent || 0);
 
       return {
         mint: mintAddress,
@@ -71,14 +57,20 @@ export class ScannerService {
           sells: overview.sell24h || 0,
           holders: overview.holder || 0,
           totalSupply: overview.supply || 1_000_000_000,
-          age: ageStr,
           socials: socials
         },
         security: {
           score: rug.score || 0,
           isScam: rug.isScam || false,
           top10Holders: top10Pct,
-          risks: rug.risks ? rug.risks.map((r: any) => r.name) : []
+          risks: rug.risks ? rug.risks.map((r: any) => r.name) : [],
+          lpLocked: lp.lpLockedPct || 0,
+          mintRevoked: rug.token?.mintAuthority === null,
+        freezeRevoked: rug.token?.freezeAuthority === null,
+          creator: {
+            address:rug.creator || "N/A",
+            balance: rug.creatorBalance || 0
+          }
         }
       };
     } catch (e) {
