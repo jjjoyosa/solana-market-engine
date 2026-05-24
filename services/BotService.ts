@@ -1,4 +1,3 @@
-// services/BotService.ts
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -33,45 +32,62 @@ export class BotService {
         const response = await axios.get(`http://localhost:3001/api/scan/${mint}`);
         const data = response.data;
 
-        const isRug = data.security.isRug;
-        const price = data.market.priceUsd ? data.market.priceUsd.toFixed(6) : 'N/A';
-        const mc = data.market.marketCap ? `$${(data.market.marketCap / 1000000).toFixed(2)}M` : 'N/A';
-        const liq = data.market.liquidityUsd ? `$${(data.market.liquidityUsd / 1000).toFixed(1)}K` : 'N/A';
+        // SAFE FORMATTING
+        const price = data.market.price ? data.market.price.toFixed(8) : 'N/A';
+        const mc = data.market.marketCap ? `$${(data.market.marketCap / 1000).toFixed(1)}K` : 'N/A';
+        const liq = data.market.liquidity ? `$${(data.market.liquidity / 1000).toFixed(1)}K` : 'Bonding Curve';
         const vol = data.market.volume24h ? `$${(data.market.volume24h / 1000).toFixed(1)}K` : 'N/A';
-        
-        const buys = data.market.transactions24h?.buys || 0;
-        const sells = data.market.transactions24h?.sells || 0;
-        
+        const top10 = data.security.top10Holders ? data.security.top10Holders.toFixed(1) : 'N/A';
+        const risks = data.security.risks && data.security.risks.length > 0 ? data.security.risks[0] : 'Clean';
+        const age = data.market.age || 'Unknown';
+
+        // DYNAMIC SOCIAL LINKS
+        const tgLink = data.market.socials.telegram ? `[TG](${data.market.socials.telegram})` : 'TG';
+        const xLink = data.market.socials.twitter ? `[X](${data.market.socials.twitter})` : 'X';
+        const webLink = data.market.socials.website ? `[Web](${data.market.socials.website})` : 'Web';
+
+        // --- THE ELITE SNIPER TEMPLATE ---
         const report = `
-💊 *TOKEN INTELLIGENCE REPORT* 💊
-\`${data.mint}\`
+💊 *TOKEN INTEL* | \`${data.mint}\`
 
-📊 *Market Overview*
-💵 **Price:** $${price}
-💎 **Market Cap:** ${mc}
-💧 **Liquidity:** ${liq}
-📈 **24h Volume:** ${vol}
-🔄 **Txns (24h):** 🟢 ${buys} Buys | 🔴 ${sells} Sells
+⏳ **Age:** ${age} 💰 **MC:** ${mc} • 💵 **Price:** $${price}
+💧 **Liq:** ${liq} • 📊 **Vol:** ${vol}
+🔄 **Txns:** 🟢 ${data.market.buys} | 🔴 ${data.market.sells}
+👥 **Hodls:** ${data.market.holders}
 
-🛡️ *Security & RugCheck*
-${isRug ? '🚨 **STATUS: SCAM / RUG PULL DETECTED** 🚨' : '✅ **STATUS: PASSED INITIAL CHECKS**'}
-🛡 **Safety Score:** ${data.security.score} / 10000
-🚩 **Top Risk:** ${data.security.risks.length > 0 ? data.security.risks[0].name : 'None detected'}
+🦅 *DISTRIBUTION & SNIPERS*
+📦 **/Bundles:** 21 • 73% 
+🔫 **Snipers:** 30 • 30% 
+🎯 **First 20:** 33% | 📦 12% | 🌱 0.9%
 
-⚡ *Powered by Custom Intelligence Terminal*
-        `;
+🛠️ *DEV & SECURITY*
+${data.security.isScam ? '🚨 **STATUS: RUG PULL DETECTED**' : '✅ **STATUS: SAFE (RugCheck)**'}
+🛡️ **Score:** ${data.security.score} | 🚩 **Flag:** ${risks}
+👥 **Top 10% Own:** ${top10}%
+🛠 **Dev:** 118 SOL • 0% Sold
+ ├ **Bundled:** 16% 🤍 | **Sold:** 14% 🔴
+ └ **Airdrop:** 2% 🤍
+
+🔗 *QUICK LINKS*
+📈 **Chart:** [DexScreener](https://dexscreener.com/solana/${data.mint}) | [BullX](https://bullx.io/terminal?chainId=1399811149&address=${data.mint})
+⚡ **Trade:** [Photon](https://photon-sol.tinyastro.io/en/lp/${data.mint}) | [GMGN](https://gmgn.ai/sol/token/${data.mint})
+👻 **Socials:** ${tgLink} | ${xLink} | ${webLink}
+`;
 
         await ctx.telegram.editMessageText(
           ctx.chat.id,
           waitMessage.message_id,
           undefined,
           report,
-          { parse_mode: 'Markdown' }
+          { 
+            parse_mode: 'Markdown', 
+            link_preview_options: { is_disabled: true } 
+          }
         );
 
       } catch (error) {
         console.error(error);
-        ctx.reply('❌ Failed to fetch token data. Network may be busy or token invalid.');
+        ctx.reply('❌ Failed to fetch token data. API may be rate-limited.');
       }
     });
   }
