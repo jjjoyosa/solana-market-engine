@@ -21,7 +21,7 @@ export class BotService {
 
   private generateReport(data: any) {
     const price = data.market.price ? `${data.market.price}` : 'N/A';
-    const mc = data.market.marketCap ? `${this.formatUSD(data.market.marketCap)}` : 'N/A';
+    const mc = (data.market.marketCap && data.market.marketCap > 1) ? `${this.formatUSD(data.market.marketCap)}` : 'Bonding Curve (Low Liq)';
     const liq = data.market.liquidity ? `${this.formatUSD(data.market.liquidity)}` : 'Bonding Curve';
     const vol = data.market.volume24h ? `${this.formatUSD(data.market.volume24h)}` : 'N/A';
     
