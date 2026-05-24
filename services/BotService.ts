@@ -1,6 +1,7 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { ScannerService } from './ScannerService';
 
 dotenv.config();
 
@@ -23,8 +24,7 @@ export class BotService {
         const mint = match[0];
         
         try {
-          const response = await axios.get(`http://localhost:3001/api/scan/${mint}`);
-          const data = response.data;
+          const data = await ScannerService.scanToken(mint);
 
         const formatUSD = (val: number) => {
             if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
