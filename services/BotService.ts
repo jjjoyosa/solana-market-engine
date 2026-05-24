@@ -52,9 +52,9 @@ ${data.market.symbol} | \`${data.mint}\`
 👥 **Hodls:** ${data.market.holders}
 
 *DISTRIBUTION & SNIPERS*
-📦 **Bundles:** 21 • 73% 
-🔫 **Snipers:** 30 • 30% 
-🎯 **First 20:** 33% | 📦 12% | 🌱 0.9%
+📦 **Bundles:** ${data.security.distribution.bundleCount} • ${data.security.distribution.bundlePct.toFixed(1)}% 
+🔫 **Snipers:** ${data.security.distribution.sniperCount}
+🎯 **First 20:** ${data.security.top20Holders.toFixed(1)}%
 
 *DEV & SECURITY*
 ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
@@ -65,8 +65,8 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
 👥 **Top 10% Owns:** ${top10}%
 🛠 **Dev:** \`${data.security.creator.address}\`
 💰 **Dev Balance:** ${data.security.creator.balance} SOL
- ├ **Bundled:** 16% 🤍 | **Sold:** 14% 🔴
- └ **Airdrop:** 2% 🤍
+ ├ **Held:** ${data.security.creator.heldPct.toFixed(1)}% 🤍
+ └ **Sold:** ${data.security.creator.soldPct.toFixed(1)}% 🔴
 
  *QUICK LINKS*
 📈 **Chart:** [DexScreener](https://dexscreener.com/solana/${data.mint}) | [BullX](https://bullx.io/terminal?chainId=1399811149&address=${data.mint})

@@ -41,9 +41,22 @@ export class ScannerService {
       const calculatedMc = overview.price && overview.supply ? (overview.price * overview.supply) : null;
       const finalMarketCap = overview.mc || overview.realMc || calculatedMc || fallbackMc || 0;
 
-      const top10Pct = (Array.isArray(rug.topHolders)) 
-        ? rug.topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (h.pct || 0), 0) 
-        : (rug.top10HolderPercent || 0);
+      const topHolders = Array.isArray(rug.topHolders) ? rug.topHolders : [];
+      const top10Pct = topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (h.pct || 0), 0);
+      const top20Pct = topHolders.slice(0, 20).reduce((acc: number, h: any) => acc + (h.pct || 0), 0);
+
+      const insiderNetworks = Array.isArray(rug.insiderNetworks) ? rug.insiderNetworks : [];
+      let bundlePct = 0;
+      if (rug.token && rug.token.supply) {
+         const totalBundleVolume = insiderNetworks.reduce((acc: number, n: any) => acc + (n.tokenAmount || 0), 0);
+         bundlePct = (totalBundleVolume / rug.token.supply) * 100;
+      }
+
+      const creatorAddress = rug.creator || "N/A";
+      const devHoldings = topHolders.find((h: any) => h.owner === creatorAddress);
+      const devHeldPct = devHoldings ? (devHoldings.pct || 0) : 0;
+      const devSoldPct = creatorAddress !== "N/A" ? Math.max(0, Math.min(100, 100 - devHeldPct)) : 0;
+      //
 
       return {
         mint: mintAddress,
@@ -62,14 +75,22 @@ export class ScannerService {
         security: {
           score: rug.score || 0,
           isScam: rug.isScam || false,
-          top10Holders: top10Pct,
           risks: rug.risks ? rug.risks.map((r: any) => r.name) : [],
           lpLocked: lp.lpLockedPct || 0,
           mintRevoked: rug.token?.mintAuthority === null,
         freezeRevoked: rug.token?.freezeAuthority === null,
+          top10Holders: top10Pct,
+          top20Holders: top20Pct, 
           creator: {
-            address:rug.creator || "N/A",
-            balance: rug.creatorBalance || 0
+            address: creatorAddress,
+            balance: rug.creatorBalance || 0,
+            heldPct: devHeldPct, 
+            soldPct: devSoldPct 
+          },
+          distribution: {        
+            bundleCount: insiderNetworks.length,
+            bundlePct: bundlePct,
+            sniperCount: rug.graphInsidersDetected || 0
           }
         }
       };
