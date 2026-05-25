@@ -27,11 +27,13 @@ app.get('/api/scan/:mint', async (req, res) => {
   }
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 mongoose.connect(process.env.MONGO_URI!).then(() => {
   app.listen(PORT, () => {
     console.log(`Backend API running on http://localhost:${PORT}`);
     const telegramBot = new BotService();
     telegramBot.start();
   });
+}).catch(err => {
+  console.error("Database connection failed:", err);
 });

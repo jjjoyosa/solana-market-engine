@@ -6,11 +6,27 @@ dotenv.config();
 
 export class BotService {
   private bot: Telegraf;
+  
+  private userCooldowns: Map<number, number> = new Map();
+  private COOLDOWN_MS = 3000; 
 
   constructor() {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
     this.initializeMonitor();
     this.initializeActions();
+  }
+
+  private isRateLimited(userId: number | undefined): boolean {
+    if (!userId) return false;
+    const now = Date.now();
+    const lastAction = this.userCooldowns.get(userId);
+    
+    if (lastAction && (now - lastAction) < this.COOLDOWN_MS) {
+      return true; 
+    }
+    
+    this.userCooldowns.set(userId, now);
+    return false;
   }
 
   private formatUSD(val: number) {
@@ -111,6 +127,10 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
   
   private initializeMonitor() {
     this.bot.on('text', async (ctx) => {
+      if (this.isRateLimited(ctx.from?.id)) {
+          return;
+      }
+
       const text = ctx.message.text.trim();
       const solanaMintRegex = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
       const match = text.match(solanaMintRegex);
@@ -127,7 +147,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
               ...this.generateKeyboard(data) 
           });
         } catch (error) {
-          console.error(`Failed to auto-scan ${mint}`);
+          console.error(`Failed to auto-scan ${mint}`, error);
         }
       }
     });
@@ -135,8 +155,15 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
 
   private initializeActions() {
     this.bot.action(/refresh_(.+)/, async (ctx) => {
+      if (this.isRateLimited(ctx.from?.id)) {
+          await ctx.answerCbQuery('Slow down! Please wait 3 seconds.', { show_alert: false }).catch(() => {});
+          return;
+      }
+
       const mint = ctx.match[1];
       try {
+        ctx.answerCbQuery('Fetching live data... ⚡').catch(() => {});
+        
         const data = await ScannerService.scanToken(mint, true);
         
         await ctx.editMessageText(this.generateReport(data), {
@@ -149,7 +176,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
           }
         });
       } catch (error) {
-         console.error("Refresh action failed.");
+         console.error("Refresh action failed.", error);
       }
     });
   }

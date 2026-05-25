@@ -1,21 +1,30 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import Redis from 'ioredis';
 
 dotenv.config();
 
-const cache = new Map<string, { data: any, expires: number }>();
-const CACHE_TTL_MS = 30000;
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+redis.on('error', (err) => {
+  console.error('🚨 [Redis Error]', err);
+});
+
+const CACHE_TTL_SECONDS = 30;
 
 export class ScannerService {
   static async scanToken(mintAddress: string, forceRefresh = false) {
     try {
-        if (!forceRefresh) {
-        const cached = cache.get(mintAddress);
-        if (cached && Date.now() < cached.expires) {
-          console.log(`[Cache] Serving ${mintAddress} from memory.`);
-          return cached.data;
+      const cacheKey = `token:${mintAddress}`;
+
+      if (!forceRefresh) {
+        const cachedString = await redis.get(cacheKey);
+        if (cachedString) {
+          console.log(`[Redis Cache] Serving ${mintAddress} from distributed memory.`);
+          return JSON.parse(cachedString);
         }
       }
+
       console.log(`[Scanner] Fetching market data & scanning RPC for: ${mintAddress}`);
 
       const birdeyeRes = await axios.get(`https://public-api.birdeye.so/defi/token_overview?address=${mintAddress}`, {
@@ -25,7 +34,7 @@ export class ScannerService {
       const overview = birdeyeRes?.data?.data || {};
 
       const rugKey = process.env.RUGCHECK_API_KEY;
-      const rugUrl = `https://api.rugcheck.xyz/v1/tokens/${mintAddress}/report`; // Switched to full report
+      const rugUrl = `https://api.rugcheck.xyz/v1/tokens/${mintAddress}/report`;
       
       const rugRes = await axios.get(rugUrl, {
         headers: { 'Authorization': `Bearer ${rugKey}` },
@@ -46,11 +55,6 @@ export class ScannerService {
           website: exts.website || null
       };
 
-      const isPump = mintAddress.toLowerCase().endsWith('pump');
-      const fallbackMc = isPump && overview.price ? (overview.price * 1_000_000_000) : null;
-      const calculatedMc = overview.price && overview.supply ? (overview.price * overview.supply) : null;
-      const finalMarketCap = overview.mc || overview.realMc || calculatedMc || fallbackMc || 0;
-
       const topHolders = Array.isArray(rug.topHolders) ? rug.topHolders : [];
       const top10Pct = topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (h.pct || 0), 0);
       const top20Pct = topHolders.slice(0, 20).reduce((acc: number, h: any) => acc + (h.pct || 0), 0);
@@ -66,12 +70,19 @@ export class ScannerService {
       const devHoldings = topHolders.find((h: any) => h.owner === creatorAddress);
       const devHeldPct = devHoldings ? (devHoldings.pct || 0) : 0;
       const devSoldPct = creatorAddress !== "N/A" ? Math.max(0, Math.min(100, 100 - devHeldPct)) : 0;
-    
+
+      const apiMc = overview.mc || overview.realMc || 0;
+      const calculatedMc = (overview.price && rug.token?.supply) ? (overview.price * rug.token.supply) : 0;
+      let finalMarketCap = apiMc > 0 ? apiMc : calculatedMc;
+
+      if (finalMarketCap > 100_000_000 && overview.liquidity < 1000) {
+          finalMarketCap = 0;
+      }
 
       const reportData = {
         mint: mintAddress,
         market: {
-            symbol: overview.symbol || 'N/A',
+          symbol: overview.symbol || 'N/A',
           price: overview.price || 0,
           marketCap: finalMarketCap,
           liquidity: overview.liquidity || 0,
@@ -88,7 +99,7 @@ export class ScannerService {
           risks: rug.risks ? rug.risks.map((r: any) => r.name) : [],
           lpLocked: lp.lpLockedPct || 0,
           mintRevoked: rug.token?.mintAuthority === null,
-        freezeRevoked: rug.token?.freezeAuthority === null,
+          freezeRevoked: rug.token?.freezeAuthority === null,
           top10Holders: top10Pct,
           top20Holders: top20Pct, 
           creator: {
@@ -105,7 +116,8 @@ export class ScannerService {
         }
       };
 
-      cache.set(mintAddress, { data: reportData, expires: Date.now() + CACHE_TTL_MS });
+      await redis.set(cacheKey, JSON.stringify(reportData), 'EX', CACHE_TTL_SECONDS);
+      
       return reportData;
     } catch (e) {
       console.error(e);
