@@ -1,14 +1,15 @@
 import { Telegraf, Markup } from 'telegraf';
 import { ScannerService } from './ScannerService';
 import dotenv from 'dotenv';
+import Redis from 'ioredis';
 
 dotenv.config();
 
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
 export class BotService {
   private bot: Telegraf;
-  
-  private userCooldowns: Map<number, number> = new Map();
-  private COOLDOWN_MS = 3000; 
+  private COOLDOWN_SECONDS = 3;
 
   constructor() {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
@@ -16,17 +17,19 @@ export class BotService {
     this.initializeActions();
   }
 
-  private isRateLimited(userId: number | undefined): boolean {
+  private async isRateLimited(userId: number | undefined): Promise<boolean> {
     if (!userId) return false;
-    const now = Date.now();
-    const lastAction = this.userCooldowns.get(userId);
+    const key = `ratelimit:${userId}`;
     
-    if (lastAction && (now - lastAction) < this.COOLDOWN_MS) {
-      return true; 
+    try {
+      const isLimited = await redis.get(key);
+      if (isLimited) return true; 
+      
+      await redis.set(key, '1', 'EX', this.COOLDOWN_SECONDS);
+      return false; 
+    } catch (err) {
+      return false; 
     }
-    
-    this.userCooldowns.set(userId, now);
-    return false;
   }
 
   private formatUSD(val: number) {
@@ -69,7 +72,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
 🚩 **Flag:** ${risks}
 ⛓️ **Mint Auth:** ${mintStatus}
 ❄️ **Freeze Auth:** ${freezeStatus}
-👥 **Top 10% Owns:** ${top10}%
+👥 **Top 10%:** ${top10}%
 
 🛠 **Dev:** \`${data.security.creator.address}\`
 💰 **Dev Balance:** ${data.security.creator.balance} SOL
@@ -127,7 +130,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
   
   private initializeMonitor() {
     this.bot.on('text', async (ctx) => {
-      if (this.isRateLimited(ctx.from?.id)) {
+      if (await this.isRateLimited(ctx.from?.id)) {
           return;
       }
 
@@ -147,7 +150,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
               ...this.generateKeyboard(data) 
           });
         } catch (error) {
-          console.error(`Failed to auto-scan ${mint}`, error);
+          console.error(`Failed to auto-scan ${mint}`);
         }
       }
     });
@@ -155,15 +158,13 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
 
   private initializeActions() {
     this.bot.action(/refresh_(.+)/, async (ctx) => {
-      if (this.isRateLimited(ctx.from?.id)) {
+      if (await this.isRateLimited(ctx.from?.id)) {
           await ctx.answerCbQuery('Slow down! Please wait 3 seconds.', { show_alert: false }).catch(() => {});
           return;
       }
 
       const mint = ctx.match[1];
       try {
-        ctx.answerCbQuery('Fetching live data... ⚡').catch(() => {});
-        
         const data = await ScannerService.scanToken(mint, true);
         
         await ctx.editMessageText(this.generateReport(data), {
@@ -176,7 +177,7 @@ ${data.security.isScam ? '🚨 *RUG PULL DETECTED*' : '✅ *SAFE*'}
           }
         });
       } catch (error) {
-         console.error("Refresh action failed.", error);
+         console.error("Refresh action failed.");
       }
     });
   }

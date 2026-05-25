@@ -5,9 +5,8 @@ import Redis from 'ioredis';
 dotenv.config();
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-
 redis.on('error', (err) => {
-  console.error('🚨 [Redis Error]', err);
+  console.error('🚨 [Redis Error]', err.message);
 });
 
 const CACHE_TTL_SECONDS = 30;
@@ -16,13 +15,19 @@ export class ScannerService {
   static async scanToken(mintAddress: string, forceRefresh = false) {
     try {
       const cacheKey = `token:${mintAddress}`;
+      let cachedString = null;
 
       if (!forceRefresh) {
-        const cachedString = await redis.get(cacheKey);
-        if (cachedString) {
-          console.log(`[Redis Cache] Serving ${mintAddress} from distributed memory.`);
-          return JSON.parse(cachedString);
+        try {
+          cachedString = await redis.get(cacheKey);
+        } catch (redisErr: any) {
+          console.warn(`[Redis Warning] Cache unreachable, falling back to API: ${redisErr.message}`);
         }
+      }
+
+      if (cachedString) {
+        console.log(`[Cache] Serving ${mintAddress} from memory.`);
+        return JSON.parse(cachedString);
       }
 
       console.log(`[Scanner] Fetching market data & scanning RPC for: ${mintAddress}`);
@@ -34,7 +39,7 @@ export class ScannerService {
       const overview = birdeyeRes?.data?.data || {};
 
       const rugKey = process.env.RUGCHECK_API_KEY;
-      const rugUrl = `https://api.rugcheck.xyz/v1/tokens/${mintAddress}/report`;
+      const rugUrl = `https://api.rugcheck.xyz/v1/tokens/${mintAddress}/report`; 
       
       const rugRes = await axios.get(rugUrl, {
         headers: { 'Authorization': `Bearer ${rugKey}` },
@@ -55,30 +60,33 @@ export class ScannerService {
           website: exts.website || null
       };
 
+      const isPump = mintAddress.toLowerCase().endsWith('pump');
+      const fallbackMc = isPump && overview.price ? (overview.price * 1_000_000_000) : null;
+      const calculatedMc = overview.price && overview.supply ? (overview.price * overview.supply) : null;
+      const finalMarketCap = overview.mc || overview.realMc || calculatedMc || fallbackMc || 0;
+
       const topHolders = Array.isArray(rug.topHolders) ? rug.topHolders : [];
-      const top10Pct = topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (h.pct || 0), 0);
-      const top20Pct = topHolders.slice(0, 20).reduce((acc: number, h: any) => acc + (h.pct || 0), 0);
+      
+      const tokenSupply = (rug.token && Number(rug.token.supply) > 0) ? Number(rug.token.supply) : 1;
+
+      const top10Amount = topHolders.slice(0, 10).reduce((acc: number, h: any) => acc + (Number(h.amount) || 0), 0);
+      const top20Amount = topHolders.slice(0, 20).reduce((acc: number, h: any) => acc + (Number(h.amount) || 0), 0);
+      
+      const top10Pct = Math.min((top10Amount / tokenSupply) * 100, 100);
+      const top20Pct = Math.min((top20Amount / tokenSupply) * 100, 100);
 
       const insiderNetworks = Array.isArray(rug.insiderNetworks) ? rug.insiderNetworks : [];
       let bundlePct = 0;
       if (rug.token && rug.token.supply) {
-         const totalBundleVolume = insiderNetworks.reduce((acc: number, n: any) => acc + (n.tokenAmount || 0), 0);
-         bundlePct = (totalBundleVolume / rug.token.supply) * 100;
+         const totalBundleVolume = insiderNetworks.reduce((acc: number, n: any) => acc + (Number(n.tokenAmount) || 0), 0);
+         bundlePct = Math.min((totalBundleVolume / tokenSupply) * 100, 100);
       }
 
       const creatorAddress = rug.creator || "N/A";
       const devHoldings = topHolders.find((h: any) => h.owner === creatorAddress);
-      const devHeldPct = devHoldings ? (devHoldings.pct || 0) : 0;
+      
+      const devHeldPct = devHoldings ? ((Number(devHoldings.amount) || 0) / tokenSupply) * 100 : 0;
       const devSoldPct = creatorAddress !== "N/A" ? Math.max(0, Math.min(100, 100 - devHeldPct)) : 0;
-
-      const apiMc = overview.mc || overview.realMc || 0;
-      const calculatedMc = (overview.price && rug.token?.supply) ? (overview.price * rug.token.supply) : 0;
-      let finalMarketCap = apiMc > 0 ? apiMc : calculatedMc;
-
-      if (finalMarketCap > 100_000_000 && overview.liquidity < 1000) {
-          finalMarketCap = 0;
-      }
-
       const reportData = {
         mint: mintAddress,
         market: {
@@ -116,8 +124,14 @@ export class ScannerService {
         }
       };
 
-      await redis.set(cacheKey, JSON.stringify(reportData), 'EX', CACHE_TTL_SECONDS);
-      
+      if (reportData.market.symbol !== 'N/A') {
+        try {
+          await redis.set(cacheKey, JSON.stringify(reportData), 'EX', CACHE_TTL_SECONDS);
+        } catch (redisErr: any) {
+          console.warn(`[Redis Warning] Failed to save to cache: ${redisErr.message}`);
+        }
+      }
+
       return reportData;
     } catch (e) {
       console.error(e);
